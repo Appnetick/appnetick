@@ -264,7 +264,7 @@ async function sendChatNotification({
 
         senderUid: senderUid,
 
-        type: "chat",
+        type: "OtpChat",
 
         receiverUid: receiverUid,
 
