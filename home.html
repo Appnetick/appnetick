@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Appnetick Message Tester</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #111;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.08);
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #777;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin: 15px 0 7px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 13px;
+            font-size: 15px;
+            outline: none;
+            background: #fafafa;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: #2979ff;
+            background: white;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            background: #2979ff;
+            color: white;
+        }
+
+        button:hover {
+            opacity: .9;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .both {
+            grid-column: 1 / -1;
+            background: #111;
+        }
+
+        .result {
+            margin-top: 20px;
+            border-radius: 14px;
+            background: #101418;
+            color: #fff;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            min-height: 100px;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .hint {
+            margin-top: 15px;
+            color: #777;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>Appnetick Message Tester</h1>
+
+        <div class="subtitle">
+            Test chat message and push notification without opening the app.
+        </div>
+
+        <label>Receiver UID</label>
+
+        <input
+            id="receiverUid"
+            type="text"
+            placeholder="Enter receiver UID"
+        >
+
+        <label>Message</label>
+
+        <textarea
+            id="message"
+            placeholder="Enter test message..."
+        >Test message from Appnetick</textarea>
+
+        <div class="buttons">
+
+            <button
+                id="chatButton"
+                onclick="sendChat()"
+            >
+                Send Chat
+            </button>
+
+            <button
+                id="notificationButton"
+                onclick="sendNotification()"
+            >
+                Send Notification
+            </button>
+
+            <button
+                id="bothButton"
+                class="both"
+                onclick="sendBoth()"
+            >
+                Send Both
+            </button>
+
+        </div>
+
+        <div
+            id="status"
+            class="status"
+        >
+            Ready
+        </div>
+
+        <div
+            id="result"
+            class="result"
+        >No test started.</div>
+
+        <div class="hint">
+            Sender account is fixed on the server.
+            Receiver FCM token is automatically taken from Firebase.
+            No FCM token or authorization token is required here.
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+const receiverInput =
+    document.getElementById("receiverUid");
+
+const messageInput =
+    document.getElementById("message");
+
+const resultBox =
+    document.getElementById("result");
+
+const statusBox =
+    document.getElementById("status");
+
+const buttons = [
+    document.getElementById("chatButton"),
+    document.getElementById("notificationButton"),
+    document.getElementById("bothButton")
+];
+
+function setLoading(loading) {
+
+    buttons.forEach(button => {
+        button.disabled = loading;
+    });
+
+    statusBox.textContent =
+        loading ? "Sending..." : "Ready";
+}
+
+function showResult(data) {
+
+    resultBox.textContent =
+        JSON.stringify(data, null, 2);
+}
+
+function getInput() {
+
+    const toUid =
+        receiverInput.value.trim();
+
+    const message =
+        messageInput.value.trim();
+
+    if (!toUid) {
+        throw new Error(
+            "Receiver UID is required."
+        );
+    }
+
+    if (!message) {
+        throw new Error(
+            "Message is required."
+        );
+    }
+
+    return {
+        toUid,
+        message
+    };
+}
+
+async function callTestApi(action) {
+
+    const input = getInput();
+
+    setLoading(true);
+
+    resultBox.textContent =
+        "Sending request...";
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/test-send",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        action: action,
+                        toUid: input.toUid,
+                        message: input.message
+                    })
+                }
+            );
+
+        const text =
+            await response.text();
+
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch {
+            data = {
+                success: false,
+                error: text
+            };
+        }
+
+        showResult(data);
+
+        if (response.ok && data.success) {
+
+            statusBox.textContent =
+                "SUCCESS";
+
+        } else {
+
+            statusBox.textContent =
+                "FAILED";
+        }
+
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+
+    } finally {
+
+        setLoading(false);
+    }
+}
+
+async function sendChat() {
+
+    try {
+        await callTestApi("chat");
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+async function sendNotification() {
+
+    try {
+        await callTestApi("notification");
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+async function sendBoth() {
+
+    try {
+        await callTestApi("both");
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+</script>
+
+</body>
+</html>
