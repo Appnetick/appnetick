@@ -1,543 +1,397 @@
-const USERS_DATABASE_URL =
-    "https://appnetick-default-rtdb.firebaseio.com";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-const OTP_UID =
-    "UJ1G3C70YMT59RUGB";
+    <title>Appnetick Message Tester</title>
 
-const NOTIFICATION_URL =
-    "https://chat-notification-server.onrender.com/send";
+    <style>
+        * {
+            box-sizing: border-box;
+        }
 
-function safeString(value) {
-    return typeof value === "string"
-        ? value.trim()
-        : "";
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #111;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.08);
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #777;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin: 15px 0 7px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 13px;
+            font-size: 15px;
+            outline: none;
+            background: #fafafa;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: #2979ff;
+            background: white;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            background: #2979ff;
+            color: white;
+        }
+
+        button:hover {
+            opacity: .9;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .both {
+            grid-column: 1 / -1;
+            background: #111;
+        }
+
+        .result {
+            margin-top: 20px;
+            border-radius: 14px;
+            background: #101418;
+            color: #fff;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            min-height: 100px;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .hint {
+            margin-top: 15px;
+            color: #777;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>Appnetick Message Tester</h1>
+
+        <div class="subtitle">
+            Test chat message and push notification without opening the app.
+        </div>
+
+        <label>Receiver UID</label>
+
+        <input
+            id="receiverUid"
+            type="text"
+            placeholder="Enter receiver UID"
+        >
+
+        <label>Message</label>
+
+        <textarea
+            id="message"
+            placeholder="Enter test message..."
+        >Test message from Appnetick</textarea>
+
+        <div class="buttons">
+
+            <button
+                id="chatButton"
+                onclick="sendChat()"
+            >
+                Send Chat
+            </button>
+
+            <button
+                id="notificationButton"
+                onclick="sendNotification()"
+            >
+                Send Notification
+            </button>
+
+            <button
+                id="bothButton"
+                class="both"
+                onclick="sendBoth()"
+            >
+                Send Both
+            </button>
+
+        </div>
+
+        <div
+            id="status"
+            class="status"
+        >
+            Ready
+        </div>
+
+        <div
+            id="result"
+            class="result"
+        >No test started.</div>
+
+        <div class="hint">
+            Sender account is fixed on the server.
+            Receiver FCM token is automatically taken from Firebase.
+            No FCM token or authorization token is required here.
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+const receiverInput =
+    document.getElementById("receiverUid");
+
+const messageInput =
+    document.getElementById("message");
+
+const resultBox =
+    document.getElementById("result");
+
+const statusBox =
+    document.getElementById("status");
+
+const buttons = [
+    document.getElementById("chatButton"),
+    document.getElementById("notificationButton"),
+    document.getElementById("bothButton")
+];
+
+function setLoading(loading) {
+
+    buttons.forEach(button => {
+        button.disabled = loading;
+    });
+
+    statusBox.textContent =
+        loading ? "Sending..." : "Ready";
 }
 
-function json(res, status, data) {
-    return res
-        .status(status)
-        .json(data);
+function showResult(data) {
+
+    resultBox.textContent =
+        JSON.stringify(data, null, 2);
 }
 
-async function firebaseGet(
-    databaseUrl,
-    path
-) {
+function getInput() {
 
-    const url =
-        databaseUrl.replace(/\/+$/, "") +
-        "/" +
-        path.replace(/^\/+/, "") +
-        ".json";
+    const toUid =
+        receiverInput.value.trim();
 
-    const response =
-        await fetch(url);
+    const message =
+        messageInput.value.trim();
 
-    const text =
-        await response.text();
-
-    if (!response.ok) {
+    if (!toUid) {
         throw new Error(
-            `Firebase GET failed: HTTP ${response.status} ${text}`
+            "Receiver UID is required."
         );
     }
 
-    if (!text || text === "null") {
-        return null;
-    }
-
-    return JSON.parse(text);
-}
-
-function getUsername(user) {
-
-    return safeString(
-        user?.Username ||
-        user?.username ||
-        user?.userName ||
-        user?.name
-    );
-}
-
-function getAvatar(user) {
-
-    return safeString(
-        user?.avatar ||
-        user?.Avatar ||
-        user?.logo ||
-        user?.profilePicture ||
-        user?.profilePic ||
-        ""
-    );
-}
-
-function getFcmToken(user) {
-
-    return safeString(
-        user?.fcmToken ||
-        user?.FCMToken ||
-        user?.fcm_token ||
-        ""
-    );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Chat Notification
-|--------------------------------------------------------------------------
-*/
-
-async function sendNotification({
-    receiverToken,
-    senderUsername,
-    message,
-    senderAvatar,
-    senderUid,
-    receiverUid
-}) {
-
-    if (!receiverToken) {
-
-        return {
-            sent: false,
-            reason:
-                "Receiver FCM token not found"
-        };
-    }
-
-    const body = {
-
-        token:
-            receiverToken,
-
-        title:
-            senderUsername,
-
-        body:
-            message,
-
-        username:
-            senderUsername,
-
-        subtext:
-            senderUsername,
-
-        image:
-            senderAvatar,
-
-        senderUid:
-            senderUid,
-
-        type:
-            "OtpChat",
-
-        receiverUid:
-            receiverUid
-    };
-
-    const response =
-        await fetch(
-            NOTIFICATION_URL,
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json",
-
-                    "Accept":
-                        "application/json"
-                },
-
-                body:
-                    JSON.stringify(body)
-            }
+    if (!message) {
+        throw new Error(
+            "Message is required."
         );
-
-    const text =
-        await response.text();
-
-    let result;
-
-    try {
-        result = JSON.parse(text);
-    } catch {
-        result = text;
-    }
-
-    if (!response.ok) {
-
-        return {
-            sent: false,
-            status:
-                response.status,
-            response:
-                result
-        };
     }
 
     return {
-        sent: true,
-        status:
-            response.status,
-        response:
-            result
+        toUid,
+        message
     };
 }
 
-/*
-|--------------------------------------------------------------------------
-| Main
-|--------------------------------------------------------------------------
-*/
+async function callTestApi(action) {
 
-export default async function handler(
-    req,
-    res
-) {
+    const input = getInput();
 
-    if (req.method !== "POST") {
+    setLoading(true);
 
-        return json(
-            res,
-            405,
-            {
-                success: false,
-                error:
-                    "Method not allowed"
-            }
-        );
-    }
+    resultBox.textContent =
+        "Sending request...";
 
     try {
 
-        const body =
-            req.body || {};
-
-        const action =
-            safeString(body.action);
-
-        const toUid =
-            safeString(body.toUid);
-
-        const message =
-            safeString(body.message);
-
-        if (!toUid) {
-
-            return json(
-                res,
-                400,
+        const response =
+            await fetch(
+                "/api/test-send",
                 {
-                    success: false,
-                    error:
-                        "Receiver UID is required"
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        action: action,
+                        toUid: input.toUid,
+                        message: input.message
+                    })
                 }
             );
-        }
 
-        if (!message) {
+        const text =
+            await response.text();
 
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "Message is required"
-                }
-            );
-        }
+        let data;
 
-        if (
-            action !== "chat" &&
-            action !== "notification" &&
-            action !== "both"
-        ) {
-
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "Invalid action"
-                }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Fixed testing sender
-        |--------------------------------------------------------------------------
-        */
-
-        const fromUid =
-            OTP_UID;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Sender
-        |--------------------------------------------------------------------------
-        */
-
-        const senderUser =
-            await firebaseGet(
-                USERS_DATABASE_URL,
-                `Users/${encodeURIComponent(fromUid)}`
-            );
-
-        if (!senderUser) {
-
-            return json(
-                res,
-                404,
-                {
-                    success: false,
-                    error:
-                        "Testing sender account not found",
-                    uid:
-                        fromUid
-                }
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Receiver
-        |--------------------------------------------------------------------------
-        */
-
-        const receiverUser =
-            await firebaseGet(
-                USERS_DATABASE_URL,
-                `Users/${encodeURIComponent(toUid)}`
-            );
-
-        if (!receiverUser) {
-
-            return json(
-                res,
-                404,
-                {
-                    success: false,
-                    error:
-                        "Receiver user not found",
-                    uid:
-                        toUid
-                }
-            );
-        }
-
-        const senderUsername =
-            getUsername(senderUser) ||
-            "OTP Verification";
-
-        const senderAvatar =
-            getAvatar(senderUser);
-
-        const receiverToken =
-            getFcmToken(receiverUser);
-
-        const result = {
-
-            success: true,
-
-            senderUid:
-                fromUid,
-
-            receiverUid:
-                toUid,
-
-            senderUsername:
-                senderUsername,
-
-            action:
-                action
-        };
-
-        /*
-        |--------------------------------------------------------------------------
-        | Notification Only
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            action === "notification" ||
-            action === "both"
-        ) {
-
-            result.notification =
-                await sendNotification({
-                    receiverToken:
-                        receiverToken,
-
-                    senderUsername:
-                        senderUsername,
-
-                    message:
-                        message,
-
-                    senderAvatar:
-                        senderAvatar,
-
-                    senderUid:
-                        fromUid,
-
-                    receiverUid:
-                        toUid
-                });
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Chat
-        |--------------------------------------------------------------------------
-        |
-        | Existing send-message API is used here.
-        |
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            action === "chat" ||
-            action === "both"
-        ) {
-
-            const expectedSecret =
-                safeString(
-                    process.env.MESSAGE_API_SECRET
-                );
-
-            if (!expectedSecret) {
-
-                return json(
-                    res,
-                    500,
-                    {
-                        success: false,
-                        error:
-                            "MESSAGE_API_SECRET is not configured"
-                    }
-                );
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Instead of exposing the secret to browser,
-            | server calls existing API.
-            |--------------------------------------------------------------------------
-            */
-
-            const host =
-                req.headers.host;
-
-            const protocol =
-                req.headers["x-forwarded-proto"] ||
-                "https";
-
-            const apiUrl =
-                `${protocol}://${host}/api/send-message`;
-
-            const response =
-                await fetch(
-                    apiUrl,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            "X-Message-API-Secret":
-                                expectedSecret
-                        },
-
-                        body:
-                            JSON.stringify({
-                                mode:
-                                    "otp",
-
-                                toUid:
-                                    toUid,
-
-                                message:
-                                    message
-                            })
-                    }
-                );
-
-            const text =
-                await response.text();
-
-            let data;
-
-            try {
-                data =
-                    JSON.parse(text);
-            } catch {
-                data = {
-                    raw:
-                        text
-                };
-            }
-
-            result.chat = {
-
-                sent:
-                    response.ok &&
-                    data?.success === true,
-
-                status:
-                    response.status,
-
-                response:
-                    data
+        try {
+            data = JSON.parse(text);
+        } catch {
+            data = {
+                success: false,
+                error: text
             };
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Overall result
-        |--------------------------------------------------------------------------
-        */
+        showResult(data);
 
-        const chatOk =
-            !result.chat ||
-            result.chat.sent === true;
+        if (response.ok && data.success) {
 
-        const notificationOk =
-            !result.notification ||
-            result.notification.sent === true;
+            statusBox.textContent =
+                "SUCCESS";
 
-        result.success =
-            chatOk &&
-            notificationOk;
+        } else {
 
-        return json(
-            res,
-            result.success
-                ? 200
-                : 500,
-            result
-        );
+            statusBox.textContent =
+                "FAILED";
+        }
 
     } catch (error) {
 
-        console.error(
-            "test-send error:",
-            error
-        );
+        statusBox.textContent =
+            "FAILED";
 
-        return json(
-            res,
-            500,
-            {
-                success: false,
-                error:
-                    error.message ||
-                    "Internal server error"
-            }
-        );
+        showResult({
+            success: false,
+            error: error.message
+        });
+
+    } finally {
+
+        setLoading(false);
     }
 }
+
+async function sendChat() {
+
+    try {
+        await callTestApi("chat");
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+async function sendNotification() {
+
+    try {
+        await callTestApi("notification");
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+async function sendBoth() {
+
+    try {
+        await callTestApi("both");
+    } catch (error) {
+
+        statusBox.textContent =
+            "FAILED";
+
+        showResult({
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+</script>
+
+</body>
+</html>
