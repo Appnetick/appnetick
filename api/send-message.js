@@ -1,103 +1,60 @@
 import admin from "firebase-admin";
 
-
-const USERS_DATABASE_URL =
-    "https://appnetick-default-rtdb.firebaseio.com";
+const USERS_DATABASE_URL = "https://appnetick-default-rtdb.firebaseio.com";
 
 const DATABASE_URL =
     process.env.FIREBASE_DATABASE_URL ||
     "https://appnetic1000-default-rtdb.firebaseio.com";
 
-const OTP_UID =
-    "UJ1G3C70YMT59RUGB";
+const OTP_UID = "UJ1G3C70YMT59RUGB";
 
 const NOTIFICATION_URL =
     "https://chat-notification-server.onrender.com/send";
 
 
-/*
+/* |--------------------------------------------------------------------------
+| Firebase Admin
 |--------------------------------------------------------------------------
-| Firebase Admin Initialization
-|--------------------------------------------------------------------------
-|
-| IMPORTANT:
-| This database is the CHAT database.
-|
 */
 
 let firebaseApp;
 
 try {
-
-    firebaseApp =
-        admin.app("appnetick-send-message");
-
+    firebaseApp = admin.app("send-message-app");
 } catch (error) {
-
-    firebaseApp =
-        admin.initializeApp(
-            {
-                credential:
-                    admin.credential.cert(
-                        {
-                            projectId:
-                                process.env.FIREBASE_PROJECT_ID,
-
-                            clientEmail:
-                                process.env.FIREBASE_CLIENT_EMAIL,
-
-                            privateKey:
-                                process.env.FIREBASE_PRIVATE_KEY
-                                    .replace(/\\n/g, "\n")
-                        }
-                    ),
-
-                databaseURL:
-                    DATABASE_URL
-            },
-
-            "appnetick-send-message"
-        );
+    firebaseApp = admin.initializeApp(
+        {
+            credential: admin.credential.cert({
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(
+                    /\\n/g,
+                    "\n"
+                )
+            }),
+            databaseURL: DATABASE_URL
+        },
+        "send-message-app"
+    );
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Firebase Database
-|--------------------------------------------------------------------------
-|
-| This db is used ONLY for generating Firebase push keys.
-|
-*/
-
-const db =
-    admin.database(firebaseApp);
+const db = admin.database(firebaseApp);
 
 
-/*
-|--------------------------------------------------------------------------
+/* |--------------------------------------------------------------------------
 | Helpers
 |--------------------------------------------------------------------------
 */
 
 function safeString(value) {
-
-    return typeof value === "string"
-        ? value.trim()
-        : "";
+    return typeof value === "string" ? value.trim() : "";
 }
-
 
 function json(res, status, data) {
-
-    return res
-        .status(status)
-        .json(data);
+    return res.status(status).json(data);
 }
 
-
 function getUsername(user) {
-
     return safeString(
         user?.Username ||
         user?.username ||
@@ -106,9 +63,7 @@ function getUsername(user) {
     );
 }
 
-
 function getAvatar(user) {
-
     return safeString(
         user?.avatar ||
         user?.Avatar ||
@@ -119,9 +74,7 @@ function getAvatar(user) {
     );
 }
 
-
 function getFcmToken(user) {
-
     return safeString(
         user?.fcmToken ||
         user?.FCMToken ||
@@ -131,16 +84,20 @@ function getFcmToken(user) {
 }
 
 
-/*
+/* |--------------------------------------------------------------------------
+| Firebase REST
 |--------------------------------------------------------------------------
-| Firebase REST GET
-|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+| USERS DATABASE:
+| https://appnetick-default-rtdb.firebaseio.com
+|
+| CHAT DATABASE:
+| https://appnetic1000-default-rtdb.firebaseio.com
+|
 */
 
-async function firebaseGet(
-    databaseUrl,
-    path
-) {
+async function firebaseGet(databaseUrl, path) {
 
     const url =
         databaseUrl.replace(/\/+$/, "") +
@@ -148,38 +105,23 @@ async function firebaseGet(
         path.replace(/^\/+/, "") +
         ".json";
 
+    const response = await fetch(url);
 
-    const response =
-        await fetch(url);
-
-
-    const text =
-        await response.text();
-
+    const text = await response.text();
 
     if (!response.ok) {
-
         throw new Error(
             `Firebase GET failed: HTTP ${response.status} ${text}`
         );
     }
 
-
-    if (
-        !text ||
-        text === "null"
-    ) {
-
+    if (!text || text === "null") {
         return null;
     }
 
-
     try {
-
         return JSON.parse(text);
-
     } catch {
-
         throw new Error(
             "Firebase returned invalid JSON."
         );
@@ -187,17 +129,7 @@ async function firebaseGet(
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Firebase REST PUT
-|--------------------------------------------------------------------------
-*/
-
-async function firebasePut(
-    databaseUrl,
-    path,
-    data
-) {
+async function firebasePut(databaseUrl, path, data) {
 
     const url =
         databaseUrl.replace(/\/+$/, "") +
@@ -205,64 +137,39 @@ async function firebasePut(
         path.replace(/^\/+/, "") +
         ".json";
 
+    const response = await fetch(url, {
 
-    const response =
-        await fetch(
-            url,
-            {
-                method: "PUT",
+        method: "PUT",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+        headers: {
+            "Content-Type": "application/json"
+        },
 
-                body:
-                    JSON.stringify(data)
-            }
-        );
+        body: JSON.stringify(data)
 
+    });
 
-    const text =
-        await response.text();
-
+    const text = await response.text();
 
     if (!response.ok) {
-
         throw new Error(
             `Firebase PUT failed: HTTP ${response.status} ${text}`
         );
     }
 
-
     if (!text) {
-
         return null;
     }
 
-
     try {
-
         return JSON.parse(text);
-
     } catch {
-
         return null;
     }
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Firebase REST PATCH
-|--------------------------------------------------------------------------
-*/
-
-async function firebasePatch(
-    databaseUrl,
-    path,
-    data
-) {
+async function firebasePatch(databaseUrl, path, data) {
 
     const url =
         databaseUrl.replace(/\/+$/, "") +
@@ -270,151 +177,71 @@ async function firebasePatch(
         path.replace(/^\/+/, "") +
         ".json";
 
+    const response = await fetch(url, {
 
-    const response =
-        await fetch(
-            url,
-            {
-                method: "PATCH",
+        method: "PATCH",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+        headers: {
+            "Content-Type": "application/json"
+        },
 
-                body:
-                    JSON.stringify(data)
-            }
-        );
+        body: JSON.stringify(data)
 
+    });
 
-    const text =
-        await response.text();
-
+    const text = await response.text();
 
     if (!response.ok) {
-
         throw new Error(
             `Firebase PATCH failed: HTTP ${response.status} ${text}`
         );
     }
 
-
     if (!text) {
-
         return null;
     }
 
-
     try {
-
         return JSON.parse(text);
-
     } catch {
-
         return null;
     }
 }
 
 
-/*
-|--------------------------------------------------------------------------
+/* |--------------------------------------------------------------------------
 | Secret Check
 |--------------------------------------------------------------------------
 */
 
-function isValidSecret(
-    received,
-    expected
-) {
+function isValidSecret(received, expected) {
 
-    received =
-        safeString(received);
+    received = safeString(received);
+    expected = safeString(expected);
 
-    expected =
-        safeString(expected);
-
-
-    if (
-        !received ||
-        !expected
-    ) {
-
+    if (!received || !expected) {
         return false;
     }
 
-
-    if (
-        received.length !==
-        expected.length
-    ) {
-
+    if (received.length !== expected.length) {
         return false;
     }
-
 
     let result = 0;
 
-
-    for (
-        let i = 0;
-        i < received.length;
-        i++
-    ) {
+    for (let i = 0; i < received.length; i++) {
 
         result |=
             received.charCodeAt(i) ^
             expected.charCodeAt(i);
-    }
 
+    }
 
     return result === 0;
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Generate REAL Firebase Push Key
-|--------------------------------------------------------------------------
-|
-| This is the important change.
-|
-| Android:
-|
-|     Chat1.push().getKey()
-|
-| Backend:
-|
-|     db.ref().push().key
-|
-| Both use Firebase's push-key algorithm.
-|
-*/
-
-function generateFirebasePushKey() {
-
-    const pushRef =
-        db.ref().push();
-
-
-    const key =
-        pushRef.key;
-
-
-    if (!key) {
-
-        throw new Error(
-            "Failed to generate Firebase push key."
-        );
-    }
-
-
-    return key;
-}
-
-
-/*
-|--------------------------------------------------------------------------
+/* |--------------------------------------------------------------------------
 | Chat Notification
 |--------------------------------------------------------------------------
 */
@@ -426,95 +253,61 @@ async function sendChatNotification({
     senderAvatar,
     senderUid,
     receiverUid,
-    messageKey,
-    mode
+    messageKey
 }) {
 
     if (!receiverToken) {
 
         return {
             sent: false,
-            reason:
-                "Receiver FCM token not found"
+            reason: "Receiver FCM token not found"
         };
+
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Notification Type
-    |--------------------------------------------------------------------------
-    |
-    | OTP:
-    |     OtpChat
-    |
-    | Normal user message:
-    |     chat
-    |
-    */
-
-    const notificationType =
-        mode === "otp"
-            ? "OtpChat"
-            : "chat";
-
 
     const body = {
 
-        token:
-            receiverToken,
+        token: receiverToken,
 
-        title:
-            senderUsername,
+        title: senderUsername,
 
-        body:
-            message,
+        body: message,
 
-        username:
-            senderUsername,
+        username: senderUsername,
 
-        subtext:
-            senderUsername,
+        subtext: senderUsername,
 
-        image:
-            senderAvatar,
+        image: senderAvatar,
 
-        senderUid:
-            senderUid,
+        senderUid: senderUid,
 
-        type:
-            notificationType,
+        type: "OtpChat",
 
-        receiverUid:
-            receiverUid,
+        receiverUid: receiverUid,
 
-        messageKey:
-            messageKey
+        messageKey: messageKey
+
     };
 
 
-    const response =
-        await fetch(
-            NOTIFICATION_URL,
-            {
-                method: "POST",
+    const response = await fetch(
+        NOTIFICATION_URL,
+        {
 
-                headers: {
-                    "Content-Type":
-                        "application/json",
+            method: "POST",
 
-                    "Accept":
-                        "application/json"
-                },
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
 
-                body:
-                    JSON.stringify(body)
-            }
-        );
+            body: JSON.stringify(body)
+
+        }
+    );
 
 
-    const text =
-        await response.text();
+    const text = await response.text();
 
 
     if (!response.ok) {
@@ -525,61 +318,47 @@ async function sendChatNotification({
             text
         );
 
-
         return {
             sent: false,
-            status:
-                response.status
+            status: response.status
         };
+
     }
 
 
     return {
         sent: true
     };
+
 }
 
 
-/*
-|--------------------------------------------------------------------------
+/* |--------------------------------------------------------------------------
 | API
 |--------------------------------------------------------------------------
 */
 
-export default async function handler(
-    req,
-    res
-) {
+export default async function handler(req, res) {
 
-    /*
-    |--------------------------------------------------------------------------
+    /*--------------------------------------------------------------------------
     | Method
-    |--------------------------------------------------------------------------
-    */
+    --------------------------------------------------------------------------*/
 
-    if (
-        req.method !== "POST"
-    ) {
+    if (req.method !== "POST") {
 
-        return json(
-            res,
-            405,
-            {
-                success: false,
-                error:
-                    "Method not allowed"
-            }
-        );
+        return json(res, 405, {
+            success: false,
+            error: "Method not allowed"
+        });
+
     }
 
 
     try {
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Secret
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const expectedSecret =
             safeString(
@@ -593,24 +372,17 @@ export default async function handler(
                 "MESSAGE_API_SECRET is not configured."
             );
 
+            return json(res, 500, {
+                success: false,
+                error: "Server configuration error"
+            });
 
-            return json(
-                res,
-                500,
-                {
-                    success: false,
-                    error:
-                        "Server configuration error"
-                }
-            );
         }
 
 
         const receivedSecret =
             safeString(
-                req.headers[
-                    "x-message-api-secret"
-                ]
+                req.headers["x-message-api-secret"]
             );
 
 
@@ -621,83 +393,59 @@ export default async function handler(
             )
         ) {
 
-            return json(
-                res,
-                401,
-                {
-                    success: false,
-                    error:
-                        "Unauthorized"
-                }
-            );
+            return json(res, 401, {
+                success: false,
+                error: "Unauthorized"
+            });
+
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Request Body
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const body =
             req.body || {};
 
 
         const mode =
-            safeString(
-                body.mode
-            ) || "user";
+            safeString(body.mode) || "user";
 
 
         const toUid =
-            safeString(
-                body.toUid
-            );
+            safeString(body.toUid);
 
 
         const message =
-            safeString(
-                body.message
-            );
+            safeString(body.message);
 
 
         let fromUid =
-            safeString(
-                body.fromUid
-            );
+            safeString(body.fromUid);
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Validation
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         if (!toUid) {
 
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "toUid is required"
-                }
-            );
+            return json(res, 400, {
+                success: false,
+                error: "toUid is required"
+            });
+
         }
 
 
         if (!message) {
 
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "message is required"
-                }
-            );
+            return json(res, 400, {
+                success: false,
+                error: "message is required"
+            });
+
         }
 
 
@@ -706,82 +454,65 @@ export default async function handler(
             mode !== "otp"
         ) {
 
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "Invalid mode"
-                }
-            );
+            return json(res, 400, {
+                success: false,
+                error: "Invalid mode"
+            });
+
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | OTP Mode
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
-        if (
-            mode === "otp"
-        ) {
+        if (mode === "otp") {
 
-            fromUid =
-                OTP_UID;
+            fromUid = OTP_UID;
+
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | User Mode
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         if (
             mode === "user" &&
             !fromUid
         ) {
 
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "fromUid is required"
-                }
-            );
+            return json(res, 400, {
+                success: false,
+                error: "fromUid is required"
+            });
+
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Prevent Self Message
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
-        if (
-            fromUid === toUid
-        ) {
+        if (fromUid === toUid) {
 
-            return json(
-                res,
-                400,
-                {
-                    success: false,
-                    error:
-                        "Sender and receiver cannot be the same"
-                }
-            );
+            return json(res, 400, {
+                success: false,
+                error:
+                    "Sender and receiver cannot be the same"
+            });
+
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | GET USER DATA
         |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        | These requests go to:
+        | appnetick-default-rtdb.firebaseio.com
+        |
         */
 
         const senderUser =
@@ -798,11 +529,9 @@ export default async function handler(
             );
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Check Sender
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         if (!senderUser) {
 
@@ -811,26 +540,18 @@ export default async function handler(
                 fromUid
             );
 
+            return json(res, 404, {
+                success: false,
+                error: "Sender user not found",
+                uid: fromUid
+            });
 
-            return json(
-                res,
-                404,
-                {
-                    success: false,
-                    error:
-                        "Sender user not found",
-                    uid:
-                        fromUid
-                }
-            );
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Check Receiver
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         if (!receiverUser) {
 
@@ -839,62 +560,42 @@ export default async function handler(
                 toUid
             );
 
+            return json(res, 404, {
+                success: false,
+                error: "Receiver user not found",
+                uid: toUid
+            });
 
-            return json(
-                res,
-                404,
-                {
-                    success: false,
-                    error:
-                        "Receiver user not found",
-                    uid:
-                        toUid
-                }
-            );
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | User Information
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         let senderUsername =
-            getUsername(
-                senderUser
-            );
+            getUsername(senderUser);
 
 
         const receiverUsername =
-            getUsername(
-                receiverUser
-            );
+            getUsername(receiverUser);
 
 
         const senderAvatar =
-            getAvatar(
-                senderUser
-            );
+            getAvatar(senderUser);
 
 
         const receiverAvatar =
-            getAvatar(
-                receiverUser
-            );
+            getAvatar(receiverUser);
 
 
         const receiverToken =
-            getFcmToken(
-                receiverUser
-            );
+            getFcmToken(receiverUser);
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | OTP Username Fallback
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         if (
             !senderUsername &&
@@ -903,6 +604,7 @@ export default async function handler(
 
             senderUsername =
                 "OTP Verification";
+
         }
 
 
@@ -910,133 +612,116 @@ export default async function handler(
 
             senderUsername =
                 "User";
+
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Timestamp
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const timestamp =
-            String(
-                Date.now()
-            );
+            String(Date.now());
 
 
-        /*
+        /*--------------------------------------------------------------------------
+        | Message Key
         |--------------------------------------------------------------------------
-        | REAL FIREBASE PUSH KEY
-        |--------------------------------------------------------------------------
+        |
+        | ONLY CHANGE:
+        | Firebase ka actual push key.
+        |
+        | Ye Android ke:
+        |
+        | Chat1.push().getKey()
+        |
+        | jaisa Firebase push key generate karega.
+        |
         */
 
         const messageKey =
-            generateFirebasePushKey();
+            db.ref().push().key;
 
 
-        console.log(
-            "Generated Firebase Push Key:",
-            messageKey
-        );
+        if (!messageKey) {
+
+            throw new Error(
+                "Failed to generate Firebase push key."
+            );
+
+        }
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Sender Chat
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const senderChat = {
 
-            typ:
-                "txt",
+            typ: "txt",
 
-            txt:
-                message,
+            txt: message,
 
-            From:
-                fromUid,
+            From: fromUid,
 
-            to:
-                toUid,
+            to: toUid,
 
-            usrnm:
-                senderUsername,
+            usrnm: senderUsername,
 
-            pp:
-                senderAvatar,
+            pp: senderAvatar,
 
-            timestamp:
-                timestamp,
+            timestamp: timestamp,
 
-            key:
-                messageKey,
+            key: messageKey,
 
-            stts:
-                "Sent"
+            stts: "Sent"
+
         };
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Receiver Chat
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const receiverChat = {
 
-            typ:
-                "txt",
+            typ: "txt",
 
-            txt:
-                message,
+            txt: message,
 
-            From:
-                fromUid,
+            From: fromUid,
 
-            to:
-                toUid,
+            to: toUid,
 
-            usrnm:
-                senderUsername,
+            usrnm: senderUsername,
 
-            pp:
-                senderAvatar,
+            pp: senderAvatar,
 
-            timestamp:
-                timestamp,
+            timestamp: timestamp,
 
-            key:
-                messageKey,
+            key: messageKey,
 
-            stts:
-                "Delivered"
+            stts: "Delivered"
+
         };
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Sender Inbox
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const senderInbox = {
 
-            lastMsg:
-                message,
+            lastMsg: message,
 
-            msgType:
-                "txt",
+            msgType: "txt",
 
             lastMsgTime:
                 Number(timestamp),
 
-            from:
-                fromUid,
+            from: fromUid,
 
-            to:
-                toUid,
+            to: toUid,
 
             chatUserName:
                 receiverUsername,
@@ -1044,25 +729,25 @@ export default async function handler(
             chatUserPP:
                 receiverAvatar,
 
-            stts:
-                "Sent"
+            stts: "Sent"
+
         };
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Receiver Inbox
-        |--------------------------------------------------------------------------
-        */
+        --------------------------------------------------------------------------*/
 
         const receiverInboxPath =
             `InboxList/${toUid}/${fromUid}`;
 
 
-        /*
-        |--------------------------------------------------------------------------
+        /*--------------------------------------------------------------------------
         | Read Existing Receiver Inbox
         |--------------------------------------------------------------------------
+        |
+        | This read is from CHAT DATABASE.
+        |
         */
 
         const existingReceiverInbox =
@@ -1083,6 +768,7 @@ export default async function handler(
 
             unreadCount =
                 existingReceiverInbox.unreadCount;
+
         }
 
 
@@ -1091,20 +777,16 @@ export default async function handler(
 
         const receiverInbox = {
 
-            lastMsg:
-                message,
+            lastMsg: message,
 
-            msgType:
-                "txt",
+            msgType: "txt",
 
             lastMsgTime:
                 Number(timestamp),
 
-            from:
-                fromUid,
+            from: fromUid,
 
-            to:
-                toUid,
+            to: toUid,
 
             chatUserName:
                 senderUsername,
@@ -1112,18 +794,22 @@ export default async function handler(
             chatUserPP:
                 senderAvatar,
 
-            stts:
-                "Delivered",
+            stts: "Delivered",
 
             unreadCount:
                 unreadCount
+
         };
 
 
-        /*
+        /*--------------------------------------------------------------------------
+        | WRITE CHAT + INBOX
         |--------------------------------------------------------------------------
-        | WRITE CHAT
-        |--------------------------------------------------------------------------
+        |
+        | These requests go to:
+        |
+        | appnetic1000-default-rtdb.firebaseio.com
+        |
         */
 
         await firebasePut(
@@ -1140,12 +826,6 @@ export default async function handler(
         );
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | WRITE INBOX
-        |--------------------------------------------------------------------------
-        */
-
         await firebasePatch(
             DATABASE_URL,
             `InboxList/${fromUid}/${toUid}`,
@@ -1160,11 +840,9 @@ export default async function handler(
         );
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | SEND NOTIFICATION
-        |--------------------------------------------------------------------------
-        */
+        /*--------------------------------------------------------------------------
+        | Send Normal Chat Notification
+        --------------------------------------------------------------------------*/
 
         const notification =
             await sendChatNotification({
@@ -1188,49 +866,41 @@ export default async function handler(
                     toUid,
 
                 messageKey:
-                    messageKey,
+                    messageKey
 
-                mode:
-                    mode
             });
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | SUCCESS
-        |--------------------------------------------------------------------------
-        */
+        /*--------------------------------------------------------------------------
+        | Success
+        --------------------------------------------------------------------------*/
 
-        return json(
-            res,
-            200,
-            {
+        return json(res, 200, {
 
-                success:
-                    true,
+            success: true,
 
-                message:
-                    "Message sent successfully",
+            message:
+                "Message sent successfully",
 
-                messageKey:
-                    messageKey,
+            messageKey:
+                messageKey,
 
-                fromUid:
-                    fromUid,
+            fromUid:
+                fromUid,
 
-                toUid:
-                    toUid,
+            toUid:
+                toUid,
 
-                timestamp:
-                    Number(timestamp),
+            timestamp:
+                Number(timestamp),
 
-                mode:
-                    mode,
+            mode:
+                mode,
 
-                notification:
-                    notification
-            }
-        );
+            notification:
+                notification
+
+        });
 
 
     } catch (error) {
@@ -1241,17 +911,15 @@ export default async function handler(
         );
 
 
-        return json(
-            res,
-            500,
-            {
+        return json(res, 500, {
 
-                success:
-                    false,
+            success: false,
 
-                error:
-                    "Internal server error"
-            }
-        );
+            error:
+                "Internal server error"
+
+        });
+
     }
+
 }
